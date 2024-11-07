@@ -4,6 +4,7 @@ open Elmish
 open SAFE
 open Shared
 open Browser.Types
+open System
 
 type Model = {
         Zodiac: RemoteData<Fortune List>
@@ -16,6 +17,7 @@ type Model = {
         showZodiac: bool
         showModal: bool
         SelectedId: int
+        SelectedOldId: int
         SelectDate: string
         SelectCard: string
         AddAlready: string
@@ -29,15 +31,16 @@ type Msg =
     | LoadCard of ApiCall<unit,Card List>
     | LoadFavCard of ApiCall<unit,Room List>
     | LoadViewCard of ApiCall<int,Card List>
-    | AddCard of ApiCall<int*string*string,string>
+    | AddCard of ApiCall<int*string*string*int,string>
     | DeleteCard of ApiCall<unit,string>
     | SetDate of int
     | SetMonth of string
     | SetCardId of int
+    | SetCardOldId of int
     | ShowModal 
     | CloseModal
     | LoadCardAndShowModal
-    | LoadViewCardAndShowModal
+    | LoadViewCardAndShowModal 
 
 
 let tarotApi = Api.makeProxy<ICardApi> ()
@@ -53,6 +56,7 @@ let init () =
         showModal = false;
         Card = NotStarted;
         SelectedId = 0
+        SelectedOldId = 0
         SelectDate = "";
         SelectCard = "";
         AddAlready = "";
@@ -63,7 +67,12 @@ let init () =
     let initialCmd = LoadFavCard(Start()) |> Cmd.ofMsg
     initialModel, initialCmd
 
-
+// let getNumberByRandom =
+//     let card = [1 .. 22]
+//     let random = Random()
+//     let index = random.Next(0, List.length card)
+//     printfn "Number By Random is %d" index
+//     List.item index card 
 
 let update msg model =
     match msg with
@@ -72,6 +81,8 @@ let update msg model =
     | SetMonth month -> { model with SelectedMonth = month},Cmd.none
 
     | SetCardId card_id -> {model with SelectedId= card_id}, Cmd.none
+
+    | SetCardOldId card_id -> {model with SelectedOldId= card_id}, Cmd.none
 
     | LoadDestiny msg ->
         match msg with
@@ -106,13 +117,17 @@ let update msg model =
         | Start() ->
             let deleteCardCmd = Cmd.OfAsync.perform tarotApi.deleteCard () (Finished >> DeleteCard)
             { model with FavCard = Loading}, deleteCardCmd
-        | Finished favcard -> { model with DelCard = favcard},Cmd.none
+        | Finished favcard -> 
+            let loadCmd = LoadFavCard(Start()) |> Cmd.ofMsg 
+            { model with DelCard = favcard},loadCmd
 
 
 
     | ShowModal -> { model with showModal = true}, Cmd.none
 
-    | CloseModal -> { model with showModal = false}, Cmd.none
+    | CloseModal -> 
+        let loadCmd = LoadFavCard(Start()) |> Cmd.ofMsg
+        { model with showModal = false}, loadCmd
 
     | LoadCardAndShowModal ->
         let loadCardCmd = Cmd.ofMsg (LoadCard (Start ()))
@@ -128,10 +143,11 @@ let update msg model =
 
     | AddCard msg ->
         match msg with
-        | Start(selectId,selectDate,selectCard) ->
-            let addcardCmd = Cmd.OfAsync.perform tarotApi.addOrupdateCard (selectId,selectDate,selectCard) (Finished >> AddCard)
+        | Start(selectId,selectDate,selectCard,selectOldId) ->
+            let addcardCmd = Cmd.OfAsync.perform tarotApi.addOrupdateCard (selectId,selectDate,selectCard,selectOldId) (Finished >> AddCard)
             { model with FavCard = Loading}, addcardCmd
-        | Finished fav -> { model with SelectCard = fav},Cmd.none
+        | Finished fav -> 
+            { model with SelectCard = fav},Cmd.none
 
 
 open Feliz
@@ -148,7 +164,13 @@ module ViewComponents =
                     ]
                 Html.h3 [
                     prop.className "text-center text-4xl font-bold text-purple-800 mb-3 rounded-md p-4"
-                    prop.text "°*Kunmom Tarot ✧*"
+                    prop.children [
+                        Html.a [
+                            prop.href "https://www.instagram.com/kunmom_tarot/"
+                            prop.text "°*Kunmom Tarot ✧*"
+                        ]
+                    ]
+                    
                 ]
             ]
         ]
@@ -163,7 +185,7 @@ module ViewComponents =
                     ]
                 Html.h3 [
                     prop.className "text-center text-xl font-bold  p-4"
-                    prop.text "°* << Kunmom Tarot ✧*"
+                    prop.text "°*กด Kunmom Tarot ด้านบนได้เลยค่ะ✧*"
                 ]
             ]
         ]
@@ -200,7 +222,7 @@ module ViewComponents =
                             prop.className "mb-2 ml-12 h-36 w-16 lg:h-full lg:w-36  hover:cursor-pointer"
                             prop.children [
                                 Html.a [
-                                    prop.href "https://www.instagram.com/kunmom_tarot/"
+                                    prop.href "#"
                                     prop.className "ml-12 h-24 w-24 rounded-full  hover:cursor-pointer  "
                                     prop.children [ Html.img [ prop.src "/image-modified.png"; prop.alt "Kunmom-Tarot" ] ]
                                 ]
@@ -401,12 +423,30 @@ module ViewComponents =
                                         Html.button [
                                             prop.className "flex bg-green-400 hover:bg-green-500 justify-center items-center rounded w-20 h-10"
                                             prop.text "บันทึก"
-                                            prop.onClick (fun _ ->
-                                                let currentDate = System.DateTime.Now.ToString("dd/MMMM/yyyy")
-                                                let chooseCard = card.[0].CardName
-                                                let chooseId = card.[0].CardId
-                                                dispatch (SetCardId chooseId)
-                                                dispatch (AddCard (Start (chooseId,currentDate, chooseCard)))
+                                            match model.FavCard with
+                                            | NotStarted -> ()
+                                            | Loading -> ()
+                                            | Loaded oldcard ->
+                                                if oldcard <> [] then 
+                                                    prop.onClick (fun _ ->
+                                                        let currentDate = System.DateTime.Now.ToString("dd/MMMM/yyyy")
+                                                        let chooseCard = card.[0].CardName
+                                                        let chooseId = card.[0].CardId
+                                                        let chooseOldId = oldcard.[0].Id
+                                                        dispatch (SetCardOldId chooseOldId)
+                                                        dispatch (SetCardId chooseId)
+                                                        dispatch (AddCard (Start (chooseId,currentDate, chooseCard,chooseOldId)))
+                                                    )
+                                                else 
+                                                    prop.onClick (fun _ ->
+                                                        let currentDate = System.DateTime.Now.ToString("dd/MMMM/yyyy")
+                                                        let chooseCard = card.[0].CardName
+                                                        let chooseId = card.[0].CardId
+                                                        dispatch (SetCardId chooseId)
+                                                        dispatch (AddCard (Start (chooseId,currentDate, chooseCard,1)))
+                                                
+                                                
+                                                
                                             ) 
                                         ] 
                                         Html.button [
@@ -512,11 +552,8 @@ module ViewComponents =
                                             Html.button [
                                                 prop.className "border border-cyan-500 shadow-lg w-12 h-8 rounded-md bg-cyan-500 hover:bg-cyan-400 hover:border-cyan-400 "
                                                 prop.text "กดดู"
-                                                // prop.onKeyPress (fun _ -> dispatch (SetCardName card.[0].CardName))
-                                                // prop.onClick (fun _ ->
-                                                //     match model.SelectedCardName with
-                                                //     | selectCardName -> dispatch (LoadViewCard (Start(card.[0].CardName))))
-                                                prop.onClick (fun _ -> dispatch (LoadViewCardAndShowModal))
+                                                prop.onClick (fun _ -> 
+                                                    dispatch (LoadViewCardAndShowModal))
                                             ]
                                         ] 
                                     ]
@@ -532,7 +569,7 @@ module ViewComponents =
                                     
                                 ]
                             ]
-                        Html.text $"{model.SelectedId}"
+                        
                     ]
                 ]
             ]
@@ -549,7 +586,6 @@ let view model dispatch =
                 prop.children [
                     ViewComponents.doZodiac model dispatch
                     ViewComponents.doCard model dispatch
-                    // if model.showModal then ViewComponents.modalCard model dispatch
                     ViewComponents.FavoriteCard model dispatch
                     if model.showModal then ViewComponents.modalCard model dispatch
                     ViewComponents.footer 

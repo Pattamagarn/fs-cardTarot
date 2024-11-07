@@ -67,6 +67,6 @@ type ICardApi = {
     getFavoriteCard : unit -> Async<Room list>
     getViewCard : int -> Async<Card list>
     // addCard: string*string -> Async<string>
-    addOrupdateCard : int*string*string -> Async<string>
+    addOrupdateCard : int*string*string*int -> Async<string>
     deleteCard: unit -> Async<string>
 }

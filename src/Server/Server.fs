@@ -174,12 +174,12 @@ let addCardtoFav (connectionString: string)(id: int,date:string,card:string) : R
     with
     | msg -> Error $"เกิดข้อผิดพลาดในการบันทึกข้อมูล: {msg.Message}"
 
-let updateCardtoFav (connectionString: string)(id:int,date:string,card:string) : Result<string,string>=
+let updateCardtoFav (connectionString: string)(id:int,date:string,card:string,oldid:int) : Result<string,string>=
     try
         connectionString
         |> Sql.connect
-        |> Sql.query "UPDATE favorite_table SET id = @id,card_name = @card, day = @date WHERE id = 1"
-        |> Sql.parameters ["@id", Sql.int id;"@date", Sql.string date ; "@card", Sql.string card]
+        |> Sql.query "UPDATE favorite_table SET id = @id,card_name = @card, day = @date WHERE id = @oldid"
+        |> Sql.parameters ["@id", Sql.int id;"@date", Sql.string date ; "@card", Sql.string card; "@oldid", Sql.int oldid]
         |> Sql.execute (fun read ->
             {
                 Id = read.int "id"
@@ -206,10 +206,10 @@ let checkCardExists (connectionString: string) (day: string) : Result<bool, stri
     with
     | ex -> Error $"เกิดข้อผิดพลาดในการตรวจสอบข้อมูล: {ex.Message}"
 
-let addOrUpdateCard (connectionString: string) (id: int,date: string, card: string) : Result<string, string> =
+let addOrUpdateCard (connectionString: string) (id: int,date: string, card: string,oldid:int) : Result<string, string> =
     match checkCardExists connectionString date with
     | Ok true ->
-        updateCardtoFav connectionString (id,date, card)
+        updateCardtoFav connectionString (id,date, card,oldid)
     | Ok false ->
         addCardtoFav connectionString (id,date, card)
     | Error err ->
@@ -256,8 +256,8 @@ let tarotApi ctx = {
         | Error _ -> return []
     }
 
-    addOrupdateCard = fun (id:int,date: string, card: string) -> async {
-        match addOrUpdateCard connectionString (id,date, card) with
+    addOrupdateCard = fun (id:int,date: string, card: string,oldid: int) -> async {
+        match addOrUpdateCard connectionString (id,date, card,oldid) with
         | Ok msg -> return msg
         | Error msg -> return msg
     }
